@@ -7,7 +7,6 @@ import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.*;
-import java.time.format.DateTimeParseException;
 import java.time.temporal.WeekFields;
 import java.util.List;
 import java.util.Locale;
@@ -21,8 +20,9 @@ public class TimeEntryService {
 
     public TimeEntryDTO createTimeEntry(TimeEntryDTO dto) {
         ZoneId userZone = ZoneId.of(dto.getUserTimeZone());
-        ZonedDateTime startUTC = dto.getStartTime().withZoneSameInstant(ZoneOffset.UTC);
-        ZonedDateTime endUTC = dto.getEndTime().withZoneSameInstant(ZoneOffset.UTC);
+
+        Instant startUTC = dto.getStartTime().toInstant();
+        Instant endUTC = dto.getEndTime().toInstant();
 
         TimeEntry entry = TimeEntry.builder()
                 .employeeId(dto.getEmployeeId())
@@ -33,47 +33,41 @@ public class TimeEntryService {
                 .build();
 
         TimeEntry saved = timeEntryRepository.save(entry);
-        return toDTO(saved, userZone);
+
+        return convertToDTO(saved, userZone);
     }
 
-    private TimeEntryDTO toDTO(TimeEntry entry, ZoneId userZone) {
+    private TimeEntryDTO convertToDTO(TimeEntry entry, ZoneId userZone) {
         return TimeEntryDTO.builder()
                 .id(entry.getId())
                 .employeeId(entry.getEmployeeId())
                 .projectId(entry.getProjectId())
-                .startTime(entry.getStartTime().withZoneSameInstant(userZone))
-                .endTime(entry.getEndTime().withZoneSameInstant(userZone))
+                .startTime(entry.getStartTime().atZone(userZone))
+                .endTime(entry.getEndTime().atZone(userZone))
                 .description(entry.getDescription())
                 .userTimeZone(userZone.getId())
                 .build();
     }
 
-    public String calculateTotalDuration(Long employeeId, String date, String timeZone, String type) {
+    public String calculateTotalDuration(Long employeeId, LocalDate date, String timeZone, String type) {
         ZoneId zoneId = ZoneId.of(timeZone);
-        LocalDate localDate;
-
-        try {
-            localDate = LocalDate.parse(date);
-        } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("Invalid date format. Expected format: yyyy-MM-dd");
-        }
 
         ZonedDateTime start;
         ZonedDateTime end;
 
         switch (type.toLowerCase()) {
             case "day":
-                start = localDate.atStartOfDay(zoneId).withZoneSameInstant(ZoneOffset.UTC);
-                end = localDate.plusDays(1).atStartOfDay(zoneId).withZoneSameInstant(ZoneOffset.UTC);
+                start = date.atStartOfDay(zoneId).withZoneSameInstant(ZoneOffset.UTC);
+                end = date.plusDays(1).atStartOfDay(zoneId).withZoneSameInstant(ZoneOffset.UTC);
                 break;
             case "week":
                 WeekFields weekFields = WeekFields.of(Locale.getDefault());
-                LocalDate startOfWeek = localDate.with(weekFields.dayOfWeek(), 1);
+                LocalDate startOfWeek = date.with(weekFields.dayOfWeek(), 1);
                 start = startOfWeek.atStartOfDay(zoneId).withZoneSameInstant(ZoneOffset.UTC);
                 end = start.plusDays(7);
                 break;
             case "month":
-                LocalDate firstOfMonth = localDate.withDayOfMonth(1);
+                LocalDate firstOfMonth = date.withDayOfMonth(1);
                 start = firstOfMonth.atStartOfDay(zoneId).withZoneSameInstant(ZoneOffset.UTC);
                 end = start.plusMonths(1);
                 break;
@@ -81,7 +75,10 @@ public class TimeEntryService {
                 throw new IllegalArgumentException("Invalid duration type. Use 'day', 'week', or 'month'.");
         }
 
-        List<TimeEntry> entries = timeEntryRepository.findByEmployeeIdAndStartTimeBetween(employeeId, start, end);
+        Instant startInstant = start.toInstant();
+        Instant endInstant = end.toInstant();
+
+        List<TimeEntry> entries = timeEntryRepository.findByEmployeeIdAndStartTimeBetween(employeeId, startInstant, endInstant);
 
         Duration total = entries.stream()
                 .map(e -> Duration.between(e.getStartTime(), e.getEndTime()))
@@ -95,22 +92,25 @@ public class TimeEntryService {
 
     public List<TimeEntryDTO> findOverlappingEntries(Long employeeId, ZonedDateTime start, ZonedDateTime end, String timeZone) {
         ZoneId zoneId = ZoneId.of(timeZone);
-        ZonedDateTime startUTC = start.withZoneSameInstant(ZoneOffset.UTC);
-        ZonedDateTime endUTC = end.withZoneSameInstant(ZoneOffset.UTC);
 
-        return timeEntryRepository.findByEmployeeIdAndStartTimeBeforeAndEndTimeAfter(employeeId, endUTC, startUTC)
+        Instant startInstant = start.toInstant();
+        Instant endInstant = end.toInstant();
+
+        return timeEntryRepository.findByEmployeeIdAndStartTimeBeforeAndEndTimeAfter(employeeId, endInstant, startInstant)
                 .stream()
-                .map(e -> toDTO(e, zoneId))
+                .map(e -> convertToDTO(e, zoneId))
                 .collect(Collectors.toList());
     }
 
     public List<TimeEntryDTO> getTimeEntriesBetween(Long employeeId, ZonedDateTime from, ZonedDateTime to, String timeZone) {
         ZoneId zoneId = ZoneId.of(timeZone);
-        ZonedDateTime fromUTC = from.withZoneSameInstant(ZoneOffset.UTC);
-        ZonedDateTime toUTC = to.withZoneSameInstant(ZoneOffset.UTC);
 
-        return timeEntryRepository.findByEmployeeIdAndStartTimeBetween(employeeId, fromUTC, toUTC).stream()
-                .map(entry -> toDTO(entry, zoneId))
+        Instant fromInstant = from.toInstant();
+        Instant toInstant = to.toInstant();
+
+        return timeEntryRepository.findByEmployeeIdAndStartTimeBetween(employeeId, fromInstant, toInstant).stream()
+                .map(entry -> convertToDTO(entry, zoneId))
                 .collect(Collectors.toList());
     }
+
 }

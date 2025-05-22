@@ -3,8 +3,11 @@ package com.exercise.DateAndTime.controller;
 import com.exercise.DateAndTime.dtos.TimeEntryDTO;
 import com.exercise.DateAndTime.service.TimeEntryService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 
@@ -20,37 +23,42 @@ public class TimeEntryController {
         return timeEntryService.createTimeEntry(timeEntryDTO);
     }
 
-    @GetMapping("/report")
-    public List<TimeEntryDTO> report(
-            @RequestParam Long employeeId,
-            @RequestParam String from,
-            @RequestParam String to,
-            @RequestParam String timeZone
-    ) {
-        ZonedDateTime fromZdt = ZonedDateTime.parse(from);
-        ZonedDateTime toZdt = ZonedDateTime.parse(to);
-        return timeEntryService.getTimeEntriesBetween(employeeId, fromZdt, toZdt, timeZone);
-    }
-
     @GetMapping("/total-duration")
     public String totalDuration(
             @RequestParam Long employeeId,
-            @RequestParam String date,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam String timeZone,
             @RequestParam String type
     ) {
         return timeEntryService.calculateTotalDuration(employeeId, date, timeZone, type);
     }
 
+    @GetMapping("/report")
+    public List<TimeEntryDTO> report(
+            @RequestParam Long employeeId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam String timeZone
+    ) {
+        ZoneId zone = ZoneId.of(timeZone);
+        ZonedDateTime fromZdt = from.atStartOfDay(zone);
+        ZonedDateTime toZdt = to.plusDays(1).atStartOfDay(zone);
+
+        return timeEntryService.getTimeEntriesBetween(employeeId, fromZdt, toZdt, timeZone);
+    }
+
     @GetMapping("/overlaps")
     public List<TimeEntryDTO> overlaps(
             @RequestParam Long employeeId,
-            @RequestParam String start,
-            @RequestParam String end,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end,
             @RequestParam String timeZone
     ) {
-        ZonedDateTime startZdt = ZonedDateTime.parse(start);
-        ZonedDateTime endZdt = ZonedDateTime.parse(end);
+        ZoneId zone = ZoneId.of(timeZone);
+        ZonedDateTime startZdt = start.atStartOfDay(zone);
+        ZonedDateTime endZdt = end.plusDays(1).atStartOfDay(zone);
+
         return timeEntryService.findOverlappingEntries(employeeId, startZdt, endZdt, timeZone);
     }
+
 }

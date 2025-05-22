@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.ZonedDateTime;
+import java.time.Instant;
 
 @Data
 @Entity
@@ -20,7 +20,7 @@ public class TimeEntry {
     private Long id;
     private Long employeeId;
     private Long projectId;
-    private ZonedDateTime startTime;
-    private ZonedDateTime endTime;
+    private Instant startTime;
+    private Instant endTime;
     private String description;
 }
